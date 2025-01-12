@@ -2,7 +2,7 @@ import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
-
+        //https://tedweishiwang.github.io/journal/object-oriented-design-elevator.html
         ElevatorController elevatorController = new ElevatorController();
         List<InternalButton> internalButtonList = new ArrayList<>();
         for (int i=0; i<10; i++) {
