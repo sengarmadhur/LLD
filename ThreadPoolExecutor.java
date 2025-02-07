@@ -1,6 +1,7 @@
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+//ConnectionPool: https://leetcode.com/discuss/general-discussion/1050178/design-a-thread-safe-connection-pool-java
 public class CustomThreadPoolExecutor {
     public static void main(String[] args) {
        ThreadPool pool = new ThreadPool(10, 5);
