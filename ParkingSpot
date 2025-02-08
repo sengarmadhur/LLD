@@ -1,0 +1,204 @@
+import java.util.*;
+
+
+public class Main {
+    public static void main(String[] args) {
+      List<ParkingSpot> spots = new ArrayList<>();;
+      for (int i=0; i<20; i++) {
+        ParkingSpot spot;
+        if (i%2 == 0) {
+          spot = new TwoWheelerParkingSpot();
+        } else {
+          spot = new FourWheelerParkingSpot();
+        }
+        spots.add(spot);
+      }
+      
+      ParkingSpotManager manager = new ParkingSpotManager(spots);
+      TicketBookingService ticketBookingService = new TicketBookingService();
+      PaymentService paymentService = new PaymentService();
+      PaymentStrategy paymentStrategy = new CashPaymentStrategy();
+      paymentService.paymentStrategy = paymentStrategy;
+      
+      
+      EntryGate entryGate = new EntryGate();
+      entryGate.ticketBookingService = ticketBookingService;
+      entryGate.parkingSpotManager = manager;
+      ExitGate exitGate = new ExitGate();
+      exitGate.paymentService = paymentService;
+      exitGate.parkingSpotManager = manager;
+      Vehicle v1 = new Vehicle();
+      v1.name = "Baleno";
+      v1.type = "CAR";
+      
+      Vehicle v2 = new Vehicle();
+      v2.name = "Apache";
+      v2.type = "BIKE";
+      
+      Ticket t1 = entryGate.bookTicket(v1);
+      
+      Ticket t2 = entryGate.bookTicket(v2);
+      
+      exitGate.pay(t1);
+      exitGate.pay(t2);
+  }
+}
+
+class Vehicle{
+  String name;
+  String color;
+  String type;
+  String registrationNumber;
+  public String toString() {
+    return "name: " + name + " type: " + type;
+  }
+} 
+
+interface PaymentStrategy {
+  void makePayment(int amount);
+}
+
+class CashPaymentStrategy implements PaymentStrategy {
+  public void makePayment(int amount) {
+    System.out.println("Cash payment done for amount: " + amount);
+  }
+}
+
+abstract class ParkingSpot{
+  static Random random = new Random();
+  int id;
+  String type;
+  boolean available;
+  Vehicle vehicle;
+  public String toString() {
+    return "Id: " + id  + " type: " + type;
+  }
+}
+
+class TwoWheelerParkingSpot extends ParkingSpot{
+  public TwoWheelerParkingSpot() {
+    id = random.nextInt(100000);
+    type = "BIKE";
+    available = true;
+    vehicle = null;
+  }
+  
+}
+
+class FourWheelerParkingSpot extends ParkingSpot {
+  public FourWheelerParkingSpot() {
+    id = random.nextInt(100000);
+    type = "CAR";
+    available = true;
+    vehicle = null;
+  }
+}
+
+class Ticket{
+  int id;
+  long bookingTime;
+  Vehicle vehicle;
+  ParkingSpot parkingSpot;
+  int exitGate;
+  int entryGate;
+  
+  public String toString() {
+    return "Id: " + id + " bookingTime: " + bookingTime + " Vehicle: " + vehicle;
+  }
+}
+
+class EntryGate {
+  int id;
+  TicketBookingService ticketBookingService;
+  ParkingSpotManager parkingSpotManager;
+  public Ticket bookTicket(Vehicle vehicle) {
+    ParkingSpot spot = parkingSpotManager.findParkingSpot(vehicle.type);
+    if (spot == null) {
+      System.out.println("Parking is full");
+      return null;
+    } 
+    System.out.println("Found spot:" + spot + " for vehicle:" + vehicle);
+    parkingSpotManager.bookSpot(spot, vehicle);
+    Ticket ticket = ticketBookingService.bookTicket(spot, vehicle);
+    ticket.entryGate = id;
+    return ticket;
+  }
+}
+
+class ExitGate {
+  int id;
+  PaymentService paymentService;
+  ParkingSpotManager parkingSpotManager;
+  public void pay(Ticket ticket) {
+    System.out.println("Paying for ticket: " + ticket.id);
+    paymentService.pay(ticket);
+    parkingSpotManager.emptySpot(ticket.parkingSpot);
+    ticket.exitGate = id;
+  }
+}
+
+
+class PaymentService {
+  PaymentStrategy paymentStrategy;
+  
+  public void pay(Ticket ticket) {
+    int amount;
+    switch(ticket.vehicle.type) {
+      case "BIKE":
+        amount = 20;
+        break;
+      case "CAR":
+        amount = 50;
+        break;
+      default:
+        amount = 30;
+        break;
+    }
+    paymentStrategy.makePayment(amount);
+  }
+  
+}
+
+class TicketBookingService {
+  static Random random = new Random();
+  public Ticket bookTicket(ParkingSpot spot, Vehicle vehicle) {
+    
+    Ticket ticket = new Ticket();
+    ticket.id = random.nextInt(100000);
+    ticket.vehicle = vehicle;
+    ticket.parkingSpot = spot;
+    System.out.println("Booked ticket: " + ticket);
+    return ticket;
+  }
+}
+
+class ParkingSpotManager {
+  
+  List<ParkingSpot> parkingSpots;
+  public ParkingSpotManager(List<ParkingSpot> spots) {
+    parkingSpots = spots;
+  }
+  
+  public ParkingSpot findParkingSpot(String type) {
+    for (ParkingSpot spot: parkingSpots) {
+      if (spot.type.equals(type) && spot.available) {
+        return spot;
+      }
+    }
+    return null;
+  }
+  
+  public void bookSpot(ParkingSpot spot, Vehicle vehicle) {
+    spot.available = false;
+    spot.vehicle = vehicle;
+  }
+  
+  public void emptySpot(ParkingSpot spot) {
+    spot.available = true;
+    spot.vehicle = null;
+  }
+}
+
+class ParkingLot {
+  
+}
