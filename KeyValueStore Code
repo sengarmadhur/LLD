@@ -1,0 +1,92 @@
+import java.util.*;
+import java.util.Map;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+/*
+  Using key level locking
+*/
+public class Main {
+    public static void main(String[] args)  {
+      IKeyValueStore<Integer, Integer> keyValueStore = new KeyValueStore<>();
+      Thread t1 = new Thread(() -> {
+        for (int i=11; i<223; i++) {
+          keyValueStore.put(i, i*i*i);
+        }
+      });
+      
+      Thread t2 = new Thread(() -> {
+        for (int i=11; i<223; i++) {
+          keyValueStore.put(i, i*i);
+        }
+      });
+      
+      Thread t3 = new Thread(() -> {
+        for (int i=11; i<222; i++) {
+          System.out.println(i + " -> " + keyValueStore.get(i));
+        }
+      });
+      t1.start();
+      t3.start();
+      t2.start();
+      
+  }
+}
+
+
+interface IKeyValueStore<K,V> {
+  V get(K key);
+  void put(K key, V value);
+  void remove(K key);
+}
+
+class KeyValueStore<K,V> implements IKeyValueStore<K,V> {
+  private Map<K,V> keyValueMap;
+  private Map<K, ReadWriteLock> lockMap;
+  
+  KeyValueStore() {
+    keyValueMap = new HashMap<>();
+    lockMap = new HashMap<>();
+  }
+  
+  public V get(K key) {
+    if (lockMap.containsKey(key)) {
+      ReadWriteLock lock = lockMap.get(key);
+      lock.readLock().lock();
+      V val = keyValueMap.get(key);
+      lock.readLock().unlock();
+      return val;
+    }
+    System.out.println("No value found for Kye:" + key);
+    return null;
+  }
+  
+  public void put(K key, V value) {
+    if (lockMap.containsKey(key)) {
+      ReadWriteLock lock = lockMap.get(key);
+      lock.writeLock().lock();
+      keyValueMap.put(key, value);
+      lock.writeLock().unlock();
+      System.out.println("Updated key: " + key + " value: " + value);
+      return;
+    }
+    
+    ReadWriteLock lock = new ReentrantReadWriteLock();
+    lock.writeLock().lock();
+    keyValueMap.put(key, value);
+    lockMap.put(key, lock);
+    lock.writeLock().unlock();
+    System.out.println("Updated key: " + key + " value: " + value);
+  } 
+  
+  public void remove(K key) {
+    if (lockMap.containsKey(key)) {
+      ReadWriteLock lock = lockMap.get(key);
+      lock.writeLock().lock();
+      keyValueMap.remove(key);
+      lock.writeLock().unlock();
+      lockMap.remove(key);
+    }
+  }
+  
+}
+
