@@ -1,0 +1,232 @@
+import java.util.*;
+import java.util.Map;
+
+
+public class Main{
+    public static void main(String[] args) {
+
+        Subscriber s1 = new Subscriber(1, "Ram");
+
+
+        Subscriber s2 = new Subscriber(2, "Sachin");
+
+
+        Subscriber s3 = new Subscriber(3, "Mayank");
+
+
+        IMultiThreadedQueue q = new MultiThreadedQueue();
+        Topic t1 = q.cretaeTopic("Topic1", 1);
+        Topic t2 = q.cretaeTopic("Topic2", 2);
+        Topic t3 = q.cretaeTopic("Topic3", 3);
+
+        q.subscribe(t1, s1);
+        q.subscribe(t1, s2);
+        q.subscribe(t1, s3);
+
+        q.subscribe(t2, s1);
+        q.subscribe(t2, s2);
+        q.subscribe(t3, s3);
+
+        //q.publish(t1, new Message("bxjxcsfdx", System.currentTimeMillis(), 5000, t1));
+        
+        for (int i=0;i<100; i++) {
+            q.publish(t1, new Message("bxjxcsfdx", System.currentTimeMillis(), 1, t1));
+        }
+
+    }
+}
+
+class Topic {
+    int id;
+    String name;
+    List<Subscriber> subscribers;
+
+    public Topic(int i, String name) {
+        id = i;
+        this.name = name;
+        subscribers = new ArrayList<>();
+    }
+
+    public void addSubscriber(Subscriber s) {
+        subscribers.add(s);
+        System.out.println("Subscriber " + s.name + " added in topic: " + name);
+    }
+}
+
+class Subscriber {
+    int id;
+    String name;
+    List<Topic> subscriptions;
+
+    public Subscriber(int i, String name) {
+        this.id = i;
+        this.name = name;
+    }
+
+    public void consume(Message message) {
+        System.out.println("Consumed message: " + message );
+    }
+
+    public void addSubscription(Topic t) {
+        subscriptions.add(t);
+        System.out.println("Subscription fonr got subscriber:" + id + " topic:" + t.name);
+    }
+}
+
+class SubscriberWorker implements Runnable {
+    Subscriber subscriber;
+    Queue<Message> messages;
+
+    public SubscriberWorker(Subscriber s) {
+        this.subscriber = s;
+        messages = new LinkedList<>();
+    }
+    public void run() {
+        System.out.println("I am thread " + Thread.currentThread().getName() + " for subscriber " + subscriber.name);
+        synchronized(this) {
+            while(true) {
+                if (messages.isEmpty()) {
+                    try {
+                        System.out.println(Thread.currentThread().getName() + " for subscriber " + subscriber.name + " is waiting");
+                        wait();
+                        System.out.println(Thread.currentThread().getName() + " for subscriber " + subscriber.name + " is released");
+
+                    } catch(Exception e) {
+
+                    }
+                }
+                Message message = messages.poll();
+                subscriber.consume(message);
+
+            }
+        }
+    }
+
+    public void startWorker(Message message) {
+        messages.add(message);
+        synchronized(this) {
+            notifyAll();
+        }
+    }
+}
+class Message {
+    String content;
+    long timestamp;
+    long ttl;
+    Topic topic;
+    
+    public Message(String content, long timestamp, long ttl, Topic topic) {
+        this.content = content;
+        this.timestamp = timestamp;
+        this.ttl = ttl;
+        this.topic = topic;
+    }
+    public String toString() {
+        return content;
+    }
+}
+
+interface IMultiThreadedQueue{
+    void publish(Topic t, Message message);
+    Topic cretaeTopic(String name, int id);
+    void subscribe(Topic t, Subscriber s);
+}
+
+class MessagePublisher implements Runnable {
+    Queue<Message> messages;
+    Map<Topic, List<Subscriber>> topicSubscriberMap;
+    Map<Subscriber, SubscriberWorker> subscriberWorkerMap;
+    
+    public MessagePublisher(Queue<Message> q, Map<Topic, List<Subscriber>> topicSubscriberMap, Map<Subscriber, SubscriberWorker> subscriberWorkerMap) {
+        this.messages = q;
+        this.topicSubscriberMap = topicSubscriberMap;
+        this.subscriberWorkerMap = subscriberWorkerMap;
+    }
+    
+    public void run() {
+        synchronized(this) {
+            while(true) {
+                while(messages.isEmpty()) {
+                    try{
+                        System.out.println("Publisher thread is waiting");
+                        wait();
+                        System.out.println("Publisher thread is invoked");
+                    } catch(Exception e){
+                        
+                    }
+                }
+                while(!messages.isEmpty()) {
+                    Message m = messages.poll();
+                    if (System.currentTimeMillis() - m.timestamp > m.ttl) {
+                        System.out.println("Message: " + m + "  expired");
+                        continue;
+                    }
+                    List<Subscriber> subscriberList = topicSubscriberMap.get(m.topic);
+                    for( Subscriber s: subscriberList) {
+                        SubscriberWorker worker = subscriberWorkerMap.get(s);
+                        worker.startWorker(m);
+                    }
+                    System.out.println("Message published: " + m + " in topic " + m.topic);
+                }
+            }
+        }
+    }
+    
+    public void invoke() {
+        synchronized(this) {
+            notifyAll();
+        }
+    }
+}
+
+
+class MultiThreadedQueue implements  IMultiThreadedQueue {
+    Map<Topic, List<Subscriber>> topicSubscriberMap;
+    Map<Subscriber, SubscriberWorker> subscriberWorkerMap;
+    Map<Topic, List<Message>>  topicMessageMap;
+    MessagePublisher publisher;
+    Queue<Message> messages;
+
+    public MultiThreadedQueue() {
+        topicMessageMap = new HashMap<>();
+        topicSubscriberMap = new HashMap<>();
+        subscriberWorkerMap = new HashMap<>();
+        messages = new LinkedList<>();
+        publisher = new MessagePublisher(messages, topicSubscriberMap, subscriberWorkerMap);
+        Thread t1 = new Thread(publisher);
+        t1.start();
+    }
+
+    @Override
+    public void publish(Topic t, Message message) {
+        messages.add(message);
+        publisher.invoke();
+    }
+
+    @Override
+    public Topic cretaeTopic(String name, int id) {
+        Topic t = new Topic(id, name);
+        topicMessageMap.put(t, new ArrayList<>());
+        topicSubscriberMap.put(t, new ArrayList<>());
+        System.out.println("Topic created: " + t);
+        return  t;
+    }
+
+    @Override
+    public void subscribe(Topic t, Subscriber s) {
+        if (subscriberWorkerMap.containsKey(s)) {
+            List<Subscriber> subscriberList = topicSubscriberMap.get(t);
+            subscriberList.add(s);
+            topicSubscriberMap.put(t, subscriberList);
+        } else {
+            SubscriberWorker subscriberWorker = new SubscriberWorker(s);
+            Thread t1 = new Thread(subscriberWorker);
+            t1.start();
+            subscriberWorkerMap.put(s, subscriberWorker);
+            List<Subscriber> subscriberList = topicSubscriberMap.get(t);
+            subscriberList.add(s);
+            topicSubscriberMap.put(t, subscriberList);
+        }
+        System.out.println("Subscription doen for " + t + " subscriber " + s.name);
+    }
+}
