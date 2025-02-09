@@ -1,0 +1,107 @@
+import java.util.*;
+
+/*
+  Read: no thread is writing. and no thread  has requested write lock (write request has more priority than read request)
+  Write: no thread is reading and no thread is writing
+*/
+public class Main {
+    public static void main(String[] args)  {
+      ICustomReadWriteLock locker = new CustomReadWriteLock();
+      
+      Thread t1 = new Thread(() -> {
+        try{
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.writeLock();
+          locker.releaseWriteLock();
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.writeLock();
+          locker.releaseWriteLock();
+        } catch(Exception e) {
+          
+        }
+        
+      });
+      
+      Thread t2 = new Thread(() -> {
+        try{
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.writeLock();
+          locker.releaseWriteLock();
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.readLock();
+          locker.releaseReadLock();
+          locker.writeLock();
+          locker.releaseWriteLock();
+        } catch(Exception e) {
+          
+        }
+        
+      });
+      
+      t1.start();
+      t2.start();
+  }
+}
+
+
+interface ICustomReadWriteLock {
+  void readLock() throws InterruptedException;
+  void writeLock() throws InterruptedException;
+  void releaseReadLock();
+  void releaseWriteLock();
+}
+
+class CustomReadWriteLock implements ICustomReadWriteLock {
+  int readers;
+  int writers;
+  int writeLockRequests;
+  
+  public CustomReadWriteLock() {
+    readers = 0;
+    writers = 0;
+    writeLockRequests = 0;
+  }
+  
+  //to avoid race conditon on shared data i.e readers, writers, writeLockRequests
+  public synchronized void readLock() throws InterruptedException{
+    while(writers > 0 || writeLockRequests > 0) {
+      System.out.println("Putting thread: " + Thread.currentThread().getName() + " on waiting to acquire read lock");
+      wait();
+    }
+    System.out.println("Thread: " + Thread.currentThread().getName() + "Acquired read lock");
+    readers++;
+  }
+  
+  public synchronized void releaseReadLock() {
+    readers--;
+    notifyAll();
+    System.out.println("Thread: " + Thread.currentThread().getName() + " is releasing read lock");
+  }
+  
+  public synchronized void writeLock() throws InterruptedException {
+    writeLockRequests++;
+    while(writers > 0 || readers > 0) {
+      wait();
+      System.out.println("Putting thread:" + Thread.currentThread().getName() + " on wait to acquire writelock");
+    }
+    writeLockRequests--;
+    writers++;
+    System.out.println("Thread: " + Thread.currentThread().getName() + " Acquired write lock");
+  }
+  
+  public synchronized void releaseWriteLock() {
+    writers--;
+    notifyAll();
+    System.out.println(Thread.currentThread().getName() + " released write lock");
+  }
+}
